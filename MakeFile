@@ -1,94 +1,65 @@
-APP_NAME=fleet-monitor
+BIN_DIR=bin
+LOG_DIR=logs
 TCP_PORT=9000
 NATS_CONTAINER=nats
-LOG_DIR=logs
 
-.PHONY: help init nats-up nats-down kill tcp consumer sim start stop restart test clean logs
+.PHONY: init build nats-up nats-down kill start stop restart logs test clean
 
-help:
-	@echo "Available commands:"
-	@echo "  make init        -> Create logs directory"
-	@echo "  make nats-up     -> Run NATS server (docker)"
-	@echo "  make nats-down   -> Stop NATS server"
-	@echo "  make tcp         -> Run TCP server (background + log)"
-	@echo "  make consumer    -> Run NATS consumer (background + log)"
-	@echo "  make start       -> Run NATS + TCP + Consumer"
-	@echo "  make test        -> Run simulator (5 devices)"
-	@echo "  make logs        -> Tail all logs"
-	@echo "  make stop        -> Stop all services"
-	@echo "  make clean       -> Stop & cleanup"
-
-# -----------------------
-# INIT
-# -----------------------
 init:
+	@mkdir -p $(BIN_DIR)
 	@mkdir -p $(LOG_DIR)
-	@echo "📁 logs directory ready"
+
+# -----------------------
+# BUILD
+# -----------------------
+build: init
+	@echo "🔨 Building binaries..."
+	@go build -o $(BIN_DIR)/tcp-server cmd/tcp-server/main.go
+	@go build -o $(BIN_DIR)/consumer cmd/consumer/main.go
+	@go build -o $(BIN_DIR)/simulator simulator/main.go
+	@echo "✅ Build complete"
 
 # -----------------------
 # NATS
 # -----------------------
 nats-up:
-	@echo "🚀 Starting NATS..."
 	@docker run -d --name $(NATS_CONTAINER) -p 4222:4222 nats || true
 
 nats-down:
-	@echo "🛑 Stopping NATS..."
 	@docker stop $(NATS_CONTAINER) || true
 	@docker rm $(NATS_CONTAINER) || true
 
 # -----------------------
-# TCP SERVER
+# PROCESS CONTROL
 # -----------------------
 kill:
-	@echo "🔪 Killing process on port $(TCP_PORT)..."
 	@lsof -ti tcp:$(TCP_PORT) | xargs -r kill -9
-	@echo "✅ Port $(TCP_PORT) free"
-
-tcp: init
-	@echo "🚀 Starting TCP server (background)..."
-	@nohup go run cmd/tcp-server/main.go > $(LOG_DIR)/tcp.log 2>&1 &
-	@echo "📄 Log: $(LOG_DIR)/tcp.log"
-
-restart: kill tcp
 
 # -----------------------
-# CONSUMER
+# RUN SERVICES
 # -----------------------
-consumer: init
-	@echo "📥 Starting NATS consumer (background)..."
-	@nohup go run cmd/consumer/main.go > $(LOG_DIR)/consumer.log 2>&1 &
-	@echo "📄 Log: $(LOG_DIR)/consumer.log"
+start: nats-up build
+	@echo "🚀 Starting TCP server..."
+	@nohup ./$(BIN_DIR)/tcp-server > $(LOG_DIR)/tcp.log 2>&1 &
+	@echo "📥 Starting Consumer..."
+	@nohup ./$(BIN_DIR)/consumer > $(LOG_DIR)/consumer.log 2>&1 &
+	@echo "✅ Services running"
 
-# -----------------------
-# SIMULATOR
-# -----------------------
-sim: init
-	@echo "🚗 Running GPS simulator (5 devices / 5s)..."
-	@nohup go run simulator/main.go > $(LOG_DIR)/simulator.log 2>&1 &
-	@echo "📄 Log: $(LOG_DIR)/simulator.log"
+restart: stop start
 
-# -----------------------
-# COMBINED
-# -----------------------
-start:
-	@make nats-up
-	@make tcp
-	@make consumer
-	@echo "✅ All services started"
-
-test:
-	@make sim
+test: build
+	@echo "🚗 Starting simulator..."
+	@nohup ./$(BIN_DIR)/simulator > $(LOG_DIR)/simulator.log 2>&1 &
 
 logs:
-	@echo "📜 Tailing logs..."
 	@tail -f $(LOG_DIR)/tcp.log $(LOG_DIR)/consumer.log $(LOG_DIR)/simulator.log
 
 stop:
+	@pkill tcp-server || true
+	@pkill consumer || true
+	@pkill simulator || true
 	@make nats-down
-	@make kill
-	@pkill -f "cmd/consumer/main.go" || true
-	@pkill -f "simulator/main.go" || true
-	@echo "🛑 All services stopped"
+	@echo "🛑 All stopped"
 
-clean: stop
+clean:
+	@rm -rf $(BIN_DIR) $(LOG_DIR)
