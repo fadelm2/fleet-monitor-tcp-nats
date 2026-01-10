@@ -1,2 +1,4 @@
 
 time="2026-01-09 20:25:26" level=info msg="🚀 TCP Server listening on :9000"
+time="2026-01-11 06:33:06" level=info msg="🚀 TCP Server listening on :9000"
+time="2026-01-11 06:34:13" level=fatal msg="listen tcp :9000: bind: address already in use"
