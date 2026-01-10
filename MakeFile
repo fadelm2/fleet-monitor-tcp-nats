@@ -9,9 +9,6 @@ init:
 	@mkdir -p $(BIN_DIR)
 	@mkdir -p $(LOG_DIR)
 
-# -----------------------
-# BUILD
-# -----------------------
 build: init
 	@echo "🔨 Building binaries..."
 	@go build -o $(BIN_DIR)/tcp-server cmd/tcp-server/main.go
@@ -19,9 +16,6 @@ build: init
 	@go build -o $(BIN_DIR)/simulator simulator/main.go
 	@echo "✅ Build complete"
 
-# -----------------------
-# NATS
-# -----------------------
 nats-up:
 	@docker run -d --name $(NATS_CONTAINER) -p 4222:4222 nats || true
 
@@ -29,15 +23,9 @@ nats-down:
 	@docker stop $(NATS_CONTAINER) || true
 	@docker rm $(NATS_CONTAINER) || true
 
-# -----------------------
-# PROCESS CONTROL
-# -----------------------
 kill:
 	@lsof -ti tcp:$(TCP_PORT) | xargs -r kill -9
 
-# -----------------------
-# RUN SERVICES
-# -----------------------
 start: nats-up build
 	@echo "🚀 Starting TCP server..."
 	@nohup ./$(BIN_DIR)/tcp-server > $(LOG_DIR)/tcp.log 2>&1 &
