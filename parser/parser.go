@@ -9,6 +9,8 @@ import (
 )
 
 func ParseAndPublish(data []byte) {
+	logger.Log.Infof("PARSER HIT raw=%q", string(data))
+	logger.Log.Info("PARSER WILL PUBLISH gps.parsed")
 
 	if len(data) < 20 {
 		return

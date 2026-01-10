@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"fleet-monitor/logger"
 	"log"
 
 	"github.com/nats-io/nats.go"
@@ -18,5 +19,7 @@ func InitNATS(url string) {
 }
 
 func PublishGPS(data []byte) error {
+	logger.Log.Info("NATS PUBLISH EXECUTED")
+
 	return nc.Publish("gps.parsed", data)
 }
