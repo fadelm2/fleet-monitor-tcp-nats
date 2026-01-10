@@ -9,27 +9,52 @@ import (
 )
 
 func ParseAndPublish(data []byte) {
-	logger.Log.Infof("PARSER HIT raw=%q", string(data))
-	logger.Log.Info("PARSER WILL PUBLISH gps.parsed")
+	payload := strings.Trim(string(data), "()")
+	logger.Log.Infof("RAW=%s", payload)
 
-	if len(data) < 20 {
+	// split by known tokens
+	if !strings.Contains(payload, "A") {
+		logger.Log.Warn("NO GPS STATUS")
 		return
 	}
 
-	payload := string(data)
+	// IMEI: setelah "02" + 1 digit length
+	if len(payload) < 15 {
+		return
+	}
+	imei := payload[3:12]
 
-	if !strings.HasPrefix(payload, "(") || !strings.HasSuffix(payload, ")") {
+	// cari posisi status A
+	idx := strings.Index(payload, "A")
+	if idx == -1 || len(payload) < idx+20 {
 		return
 	}
 
-	proto := payload[1:3]
-	imei := payload[5:14]
+	coord := payload[idx+1:]
 
-	if proto != "02" {
-		return
+	latRaw := coord[:9]
+	latDir := coord[9:10]
+	lonRaw := coord[10:20]
+	lonDir := coord[20:21]
+
+	speedRaw := coord[21:24]
+
+	speed, _ := strconv.ParseFloat(speedRaw, 64)
+
+	lat := convertCoord(latRaw, latDir)
+	lon := convertCoord(lonRaw, lonDir)
+
+	gps := GPSLocation{
+		IMEI:  imei,
+		Lat:   lat,
+		Lon:   lon,
+		Speed: speed,
 	}
 
-	parseLocation(payload, imei)
+	b, _ := json.Marshal(gps)
+	PublishGPS(b)
+
+	logger.Log.Infof("✅ PUBLISHED IMEI=%s LAT=%f LON=%f", imei, lat, lon)
 }
 
 func parseLocation(p, imei string) {
